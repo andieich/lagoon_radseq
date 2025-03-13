@@ -4,6 +4,8 @@ format: html
 editor: visual
 ---
 
+Since the raw data (`.zip` files) are huge, I removed them from GitHub, you need to download them and place them in `data/raw`.
+
 # *Acropora*
 
 Unzip folder with raw data
