@@ -1,0 +1,12 @@
+---
+title: "Create conda environment"
+format: html
+editor: visual
+---
+
+You need to cope the following commands to terminal, it does not work from RStudio. No newer version than python 3.9 can be used to be able to install biopython
+
+```{bash}
+conda create -n radseq python=3.9 biopython numpy
+conda activate radseq
+```

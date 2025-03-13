@@ -1,0 +1,158 @@
+---
+title: "Create trees and assign haplotypes"
+format: html
+editor: visual
+---
+
+# *Acropora*
+
+Unzip folder with raw data
+
+```{bash}
+unzip ../data/raw/12-results_2025-03-07_stacks_workflow_acropora.zip -d ../data/raw/
+```
+
+Unzip, move, and rename .vcf.gz file
+
+```{bash}
+gunzip -c ../data/raw/12-results_2025-03-07_stacks_workflow_acropora/second_filters_m3_p95_x0_S2.canonical.unlinked_0.5_100k.imputed_k1.vcf.gz | tee ../data/vcf/lagoon_acropora.vcf > /dev/null
+
+```
+
+Create tree with Pim's script
+
+Create popfile. The numbers are used to substring the sample names. The length of your sample names differs, but the maximum length seems to be 8 digits
+
+```{bash}
+python3 radseq-master/popfile_from_vcf.py ../data/vcf/lagoon_acropora.vcf 1 8 > ../data/clean/acro_popfile.txt
+```
+
+Create genetic distance matrix
+
+```{bash}
+python3 radseq-master/vcf_gdmatrix.py ../data/vcf/lagoon_acropora.vcf ../data/clean/acro_popfile.txt > ../data/clean/acro_gd.txt
+```
+
+Create NJ tree from GD matrix.
+
+Needs the packages `numpy` and `Bio` installed. The RStudio bash cannot use `conda`, so I am using `reticulate` to use python code from RStudio. Make sure that `numpy` and `Bio` is installed in the `conda` environment you are loading with `use_condaenv()`. [Here](create_conda_environment.qmd) is an example of how to create such an environment. Copy&Paste the commands to your terminal.
+
+Sometimes, it still does not seem to be able to load the environment, running the lines one by one (and not using the "play" button) seems to help.
+
+```{r}
+library(reticulate)
+
+# Load environment
+use_condaenv("radseq", required = TRUE)
+
+# No idea why, but for some reason, this is needed althought the package is imported in Pim's script
+py_run_string("import Bio")
+
+
+system("python3 radseq-master/gdmatrix2tree.py ../data/clean/acro_gd.txt ../data/clean/acro.tre")
+```
+
+# *Pocillopora*
+
+```{bash}
+unzip ../data/raw/12-results_2025-03-08_stacks_workflow_pocillopora.zip -d ../data/raw/
+
+gunzip -c ../data/raw/12-results_2025-03-08_stacks_workflow_pocillopora/second_filters_m3_p80_x0_S2.canonical.unlinked_0.5_100k.imputed_k1.vcf.gz | tee ../data/vcf/lagoon_pocillopora.vcf > /dev/null
+
+# use digits 1 to 16 for IDs
+python3 radseq-master/popfile_from_vcf.py ../data/vcf/lagoon_pocillopora.vcf 1 16 > ../data/clean/poci_popfile.txt
+
+python3 radseq-master/vcf_gdmatrix.py ../data/vcf/lagoon_pocillopora.vcf ../data/clean/poci_popfile.txt > ../data/clean/poci_gd.txt
+```
+
+```{r}
+system("python3 radseq-master/gdmatrix2tree.py ../data/clean/poci_gd.txt ../data/clean/poci.tre")
+```
+
+```{r}
+library(ggtree)
+library(ape)
+library(tidyverse)
+
+acro_tree <- read.nexus("../data/clean/acro.tre")
+poci_tree <- read.nexus("../data/clean/poci.tre")
+
+plot_acro <- ggtree(acro_tree) + 
+  geom_tiplab(size = 1.2) +
+  theme_minimal()
+
+plot_poci <- ggtree(poci_tree) + 
+  geom_tiplab(size = 1.2) +
+  theme_minimal()
+```
+
+```{r}
+ggsave(filename = "acro.pdf", plot = plot_acro,
+       path = "../plots", 
+       width = 35, height = 30, units = "cm")
+
+ggsave(filename = "poci.pdf", plot = plot_poci,
+       path = "../plots", 
+       width = 70, height = 30, units = "cm")
+```
+
+For me, the easiest way to get the sample IDs from the groups was to use [TreeViewer](https://treeviewer.org/). It needs to import the tree in the newick format:
+
+```{r}
+write.tree(acro_tree, file = "../data/clean/acro.newick")
+write.tree(poci_tree, file = "../data/clean/poci.newick")
+```
+
+Now, open them in TreeViewer, change to `Rooted style` (under `Reshape tree`). You can select the groups now with the `Lasso selection` which copies the sample IDs to the clipboard. It is in the right format to be copied to Excel.
+
+For ***Acropora***, samlpes 13 and 14 are different, to which of my sample IDs do they correspond?
+
+For ***Pocillopora***, this is how I assigned the haplotypes:
+
+-   Open `poci.newick` with TreeViewer
+
+-   Use `Rooted style`
+
+-   Use the `Lasso selection` to copy the samples of each group, paste them to an Excel sheet and assign numbers for the groups in a second column (see [sample_id_groups.csv](../data/clean/sample_id_groups.csv))
+
+Now you can use Caro's sample IDs to assign the haplotypes (stored in [clusters_spec.csv](../data/clean/clusters_spec.csv)):
+
+```{r}
+dat_caro_hap <- read.csv("../data/clean/clusters_spec.csv")
+
+dat_lagoon_groups <- read.csv("../data/clean/sample_id_groups.csv")
+
+# the sample IDs you used for Caro's samples use a mix of "-" and "_", the data I got from Caro only used "_". Clean up:
+dat_lagoon_groups <- dat_lagoon_groups %>% 
+  mutate(sample_id = str_replace_all(sample_id, "[-–—]", "_"))
+
+# add group number to Caro's sample IDs
+dat_caro_hap <- dat_caro_hap %>% 
+  left_join(dat_lagoon_groups, by = "sample_id") %>% 
+  select(-sample_id)
+
+# Assign species and haplotype to your data
+dat_lagoon_groups <- dat_lagoon_groups %>% 
+  left_join(dat_caro_hap, by = "group", relationship = "many-to-many") %>% 
+  select(-group)
+```
+
+Overview of sample numbers
+
+```{r}
+dat_lagoon_groups %>% 
+  #remove Caro's samples by chosing only sample_ids starting with 'p'
+  filter(str_detect(sample_id, '^p')) %>% 
+  group_by(species) %>% 
+  summarise(n = n())
+```
+
+**Note**
+
+Three samples seems to be different to the Caro's samples. For now, I grouped them with `E2B_UB-5M-CB-091`, `TIA_UB-5M-CB-394`, and `E2B_UB-15M-CB-068` (*P. meandrina*) but we should have a closer look. To what IDs do the numbers correspond?
+
+1.  `pver_38`
+
+2.  `pver_51`
+
+3.  `pver_45`
