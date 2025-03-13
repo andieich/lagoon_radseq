@@ -120,7 +120,7 @@ For ***Pocillopora***, this is how I assigned the haplotypes:
 Now you can use Caro's sample IDs to assign the haplotypes (stored in [clusters_spec.csv](../data/clean/clusters_spec.csv)):
 
 ```{r}
-dat_caro_hap <- read.csv("../data/clean/clusters_spec.csv")
+dat_caro_hap <- read.csv("../data/clean/clusters_spec.csv") 
 
 dat_lagoon_groups <- read.csv("../data/clean/sample_id_groups.csv")
 
@@ -131,11 +131,16 @@ dat_lagoon_groups <- dat_lagoon_groups %>%
 # add group number to Caro's sample IDs
 dat_caro_hap <- dat_caro_hap %>% 
   left_join(dat_lagoon_groups, by = "sample_id") %>% 
-  select(-sample_id)
+  select(-sample_id) %>% 
+  #Haplotype 1d, 1e, 1a and Haplotype 8a are meandrina, remove haplotype column for now
+  select(-haplotype) %>%
+  #2 samples of each haplotype in data, remove!
+  distinct() 
+ 
 
 # Assign species and haplotype to your data
 dat_lagoon_groups <- dat_lagoon_groups %>% 
-  left_join(dat_caro_hap, by = "group", relationship = "many-to-many") %>% 
+  left_join(dat_caro_hap, by = "group") %>% 
   select(-group)
 ```
 
@@ -147,6 +152,8 @@ dat_lagoon_groups %>%
   filter(str_detect(sample_id, '^p')) %>% 
   group_by(species) %>% 
   summarise(n = n())
+
+
 ```
 
 **Note**
