@@ -144,6 +144,13 @@ dat_lagoon_groups <- dat_lagoon_groups %>%
   select(-group)
 ```
 
+Save as table
+
+```{r}
+dat_lagoon_groups %>% 
+  write.csv("../data/clean/poci_lagoon_species.csv", row.names = F)
+```
+
 Overview of sample numbers
 
 ```{r}
